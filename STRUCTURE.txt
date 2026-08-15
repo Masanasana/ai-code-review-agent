@@ -1,0 +1,31 @@
+ai-code-review-agent/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── models.py
+│   │   ├── api/
+│   │   │   └── review.py
+│   │   ├── agent/
+│   │   │   ├── graph.py
+│   │   │   ├── nodes.py
+│   │   │   └── prompts.py
+│   │   └── services/
+│   │       ├── github.py
+│   │       └── llm.py
+│   ├── requirements.txt
+│   ├── .env.example
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── package.json
+│   └── .env.example
+├── docs/
+├── README.md
+└── .gitignore
