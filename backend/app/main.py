@@ -5,7 +5,6 @@ Main entry point for the AI Code Review Agent API.
 This module creates the FastAPI application and defines
 the initial API endpoints.
 """
-
 from fastapi import FastAPI
 
 # Import the Pydantic model used to validate incoming
@@ -16,7 +15,13 @@ from app.models import ReviewRequest
 #
 # The actual GitHub API communication is kept inside
 # services/github.py rather than inside this file.
-from app.services.github import (get_pull_request,get_pull_request_diff)
+from app.services.github import (
+    get_pull_request,
+    get_pull_request_diff
+)
+#Import diff processor
+from app.services.diff_processor import clean_diff
+
 
 # Create an instance of the FastAPI application.
 #
@@ -132,6 +137,7 @@ async def github_test(
         "url": pull_request["html_url"],
     }
 
+
 @app.get("/github-test/{owner}/{repo}/{pull_number}/diff")
 async def github_diff_test(
     owner: str,
@@ -162,4 +168,35 @@ async def github_diff_test(
         "repository": repo,
         "pull_number": pull_number,
         "diff": diff,
+    }
+
+
+@app.get("/github-test/{owner}/{repo}/{pull_number}/clean-diff")
+async def clean_diff_test(
+    owner: str,
+    repo: str,
+    pull_number: int,
+):
+    """
+    Test endpoint that retrieves a GitHub PR diff and removes
+    files that are not relevant for AI code review.
+    """
+
+    # Step 1:
+    # Retrieve the original diff from GitHub.
+    raw_diff = await get_pull_request_diff(
+        owner,
+        repo,
+        pull_number,
+    )
+
+    # Step 2:
+    # Remove irrelevant files from the diff.
+    cleaned_diff = clean_diff(raw_diff)
+
+    # Step 3:
+    # Return both versions so we can compare them during testing.
+    return {
+        "raw_diff": raw_diff,
+        "cleaned_diff": cleaned_diff,
     }
