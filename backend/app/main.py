@@ -16,7 +16,7 @@ from app.models import ReviewRequest
 #
 # The actual GitHub API communication is kept inside
 # services/github.py rather than inside this file.
-from app.services.github import get_pull_request
+from app.services.github import (get_pull_request,get_pull_request_diff)
 
 # Create an instance of the FastAPI application.
 #
@@ -130,4 +130,36 @@ async def github_test(
         "state": pull_request["state"],
         "user": pull_request["user"]["login"],
         "url": pull_request["html_url"],
+    }
+
+@app.get("/github-test/{owner}/{repo}/{pull_number}/diff")
+async def github_diff_test(
+    owner: str,
+    repo: str,
+    pull_number: int,
+):
+    """
+    Test endpoint for retrieving a pull request's code diff.
+
+    This endpoint is temporary and is used to verify that our
+    backend can successfully retrieve the actual code changes
+    from GitHub.
+
+    Later, this functionality will be called internally by the
+    /review endpoint instead of being exposed separately.
+    """
+
+    # Ask the GitHub service to retrieve the PR diff.
+    diff = await get_pull_request_diff(
+        owner,
+        repo,
+        pull_number,
+    )
+
+    # Return the diff to the caller.
+    return {
+        "owner": owner,
+        "repository": repo,
+        "pull_number": pull_number,
+        "diff": diff,
     }

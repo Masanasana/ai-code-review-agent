@@ -75,3 +75,66 @@ async def get_pull_request(
     # Convert GitHub's JSON response into a Python dictionary
     # and return it to the caller.
     return response.json()
+
+
+async def get_pull_request_diff(
+    owner: str,
+    repo: str,
+    pull_number: int,
+):
+    """
+    Retrieve the code changes introduced by a pull request.
+
+    GitHub provides the PR diff when we request the pull request
+    using the media type:
+
+        application/vnd.github.diff
+
+    The diff is particularly important for our application because
+    this is the code that will eventually be sent to the AI model
+    for review.
+
+    Parameters
+    ----------
+    owner : str
+        GitHub username or organisation that owns the repository.
+
+    repo : str
+        Name of the repository.
+
+    pull_number : int
+        Pull request number.
+
+    Returns
+    -------
+    str
+        Unified diff containing the changes made by the PR.
+    """
+
+    # Construct the GitHub API endpoint for the pull request.
+    url = (
+        f"{GITHUB_API_URL}/repos/"
+        f"{owner}/{repo}/pulls/{pull_number}"
+    )
+
+    # Tell GitHub that we specifically want the PR represented
+    # as a unified diff rather than the normal JSON response.
+    headers = {
+        "Accept": "application/vnd.github.diff"
+    }
+
+    # Create an asynchronous HTTP client.
+    async with httpx.AsyncClient() as client:
+
+        # Request the PR diff.
+        response = await client.get(
+            url,
+            headers=headers,
+        )
+
+    # Raise an exception if GitHub returned an unsuccessful
+    # HTTP status code.
+    response.raise_for_status()
+
+    # Return the raw diff as text.
+    return response.text
