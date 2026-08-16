@@ -124,21 +124,19 @@ async def get_pull_request_diff(
         f"{owner}/{repo}/pulls/{pull_number}"
     )
 
-    # Tell GitHub that we specifically want the PR represented
-    # as a unified diff rather than the normal JSON response.
-    headers = {
-        "Accept": "application/vnd.github.diff"
-    }
-
-    # Create an asynchronous HTTP client.
+    # Get our standard authenticated GitHub headers.
     headers = get_github_headers()
 
+    # Override the Accept header because we want the PR
+    # returned as a unified diff rather than JSON.
+    headers["Accept"] = "application/vnd.github.diff"
+
+    # Create an asynchronous HTTP client.
     async with httpx.AsyncClient() as client:
         response = await client.get(
             url,
             headers=headers,
         )
-    
     # Raise an exception if GitHub returned an unsuccessful
     # HTTP status code.
     response.raise_for_status()

@@ -33,6 +33,7 @@ from app.services.diff_processor import clean_diff
 
 from app.services.llm import review_code
 from app.models import CodeReview, ReviewRequest
+from app.config import settings
 
 # Create an instance of the FastAPI application.
 #
@@ -181,12 +182,13 @@ async def review_pull_request(request: ReviewRequest):
         ) from exc
 
     except Exception as exc:
-        # Catch unexpected errors so the API returns a useful
-        # response instead of exposing an unhandled exception.
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while reviewing the pull request.",
-        ) from exc
+        # Print the actual exception in the FastAPI terminal.
+        # This is useful during development and debugging.
+        print(f"Review error: {exc}")
+
+        # Re-raise the original exception so FastAPI prints
+        # the full traceback in the terminal.
+    raise
 
 # -------------------------------------------------------------------
 # GitHub Integration Test Endpoint
@@ -337,4 +339,34 @@ async def parse_url_test(pr_url: str):
         "owner": owner,
         "repository": repo,
         "pull_number": pull_number,
+    }
+
+
+@app.get("/github-test/auth")
+async def github_auth_test():
+    """
+    Test whether the configured GitHub token is valid.
+    """
+
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {settings.github_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2026-03-10",
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://api.github.com/user",
+            headers=headers,
+        )
+
+    response.raise_for_status()
+
+    user = response.json()
+
+    return {
+        "github_username": user["login"],
+        "authenticated": True,
     }
