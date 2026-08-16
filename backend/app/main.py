@@ -5,11 +5,11 @@ Main entry point for the AI Code Review Agent API.
 This module creates the FastAPI application and defines
 the initial API endpoints.
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 # Import the Pydantic model used to validate incoming
 # pull request requests.
-from app.models import ReviewRequest
+from app.models import CodeReview, ReviewRequest
 
 # Import our GitHub service function.
 #
@@ -18,11 +18,14 @@ from app.models import ReviewRequest
 from app.services.github import (
     get_pull_request,
     get_pull_request_diff,
+    parse_pull_request_url,
 )
 
 # Import the diff processor.
 from app.services.diff_processor import clean_diff
 
+from app.services.llm import review_code
+from app.models import CodeReview, ReviewRequest
 
 # Create an instance of the FastAPI application.
 #
@@ -78,18 +81,83 @@ async def health_check():
 # Define a POST endpoint at /review.
 # The frontend will use this endpoint when it wants the AI agent
 # to review a GitHub Pull Request.
-@app.post("/review")
+@app.post("/review", response_model=CodeReview)
 async def review_pull_request(request: ReviewRequest):
+    """
+    Review a GitHub pull request using the AI code review agent.
 
-    # Return a JSON response confirming that the Pull Request
-    # was successfully received by the backend.
-    return {
-        "message": "Pull request received",
+    Workflow:
 
-        # Convert the Pydantic HttpUrl object to a regular string
-        # so it can be returned cleanly as JSON.
-        "pr_url": str(request.pr_url),
-    }
+        1. Parse the GitHub PR URL.
+        2. Retrieve the PR diff.
+        3. Clean the diff.
+        4. Send the cleaned diff to the AI model.
+        5. Return the structured AI review.
+    """
+
+    try:
+        # ---------------------------------------------------------
+        # Step 1: Parse the GitHub PR URL
+        # ---------------------------------------------------------
+
+        owner, repo, pull_number = parse_pull_request_url(
+            str(request.pr_url)
+        )
+
+        # ---------------------------------------------------------
+        # Step 2: Retrieve the pull request diff
+        # ---------------------------------------------------------
+
+        raw_diff = await get_pull_request_diff(
+            owner=owner,
+            repo=repo,
+            pull_number=pull_number,
+        )
+
+        # ---------------------------------------------------------
+        # Step 3: Clean the diff
+        # ---------------------------------------------------------
+
+        cleaned_diff = clean_diff(raw_diff)
+
+        # Make sure there is actually code to review.
+        if not cleaned_diff.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="No reviewable source-code changes found in the pull request.",
+            )
+
+        # ---------------------------------------------------------
+        # Step 4: Send the diff to the AI reviewer
+        # ---------------------------------------------------------
+
+        review = await review_code(cleaned_diff)
+
+        # ---------------------------------------------------------
+        # Step 5: Return the structured review
+        # ---------------------------------------------------------
+
+        return review
+
+    except HTTPException:
+        # Re-raise HTTP exceptions so FastAPI can return the
+        # correct status code and error message.
+        raise
+
+    except ValueError as exc:
+        # URL parsing errors are client-side input errors.
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        # Catch unexpected errors so the API returns a useful
+        # response instead of exposing an unhandled exception.
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while reviewing the pull request.",
+        ) from exc
 
 # -------------------------------------------------------------------
 # GitHub Integration Test Endpoint
@@ -200,4 +268,44 @@ async def clean_diff_test(
     return {
         "raw_diff": raw_diff,
         "cleaned_diff": cleaned_diff,
+    }
+
+@app.post("/ai-test", response_model=CodeReview)
+async def ai_test():
+    """
+    Test endpoint for the Groq AI integration.
+
+    This endpoint uses a small hardcoded code example so that
+    we can verify our AI connection before connecting it to
+    the GitHub diff pipeline.
+    """
+
+    # Small intentionally vulnerable example.
+    test_diff = """
+diff --git a/app.py b/app.py
+@@ -1,5 +1,6 @@
+
+ def get_user(user_id):
++    password = "admin123"
+     return database.get_user(user_id)
+"""
+
+    # Send the test code to the AI reviewer.
+    review = await review_code(test_diff)
+
+    # Convert the Pydantic model into JSON.
+    return review
+
+@app.get("/github-test/parse-url")
+async def parse_url_test(pr_url: str):
+    """
+    Test endpoint for parsing a GitHub pull request URL.
+    """
+
+    owner, repo, pull_number = parse_pull_request_url(pr_url)
+
+    return {
+        "owner": owner,
+        "repository": repo,
+        "pull_number": pull_number,
     }
