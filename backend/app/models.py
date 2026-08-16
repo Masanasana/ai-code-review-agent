@@ -10,3 +10,4 @@ class ReviewRequest(BaseModel):
     # The GitHub Pull Request URL that the user wants the AI agent to review.
     # HttpUrl ensures that the value is a properly formatted HTTP/HTTPS URL.
     pr_url: HttpUrl
+    
