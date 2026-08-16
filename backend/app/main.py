@@ -309,3 +309,10 @@ async def parse_url_test(pr_url: str):
         "repository": repo,
         "pull_number": pull_number,
     }
+
+def get_user(user_id):
+    password = "admin123"
+
+    query = f"SELECT * FROM users WHERE id = {user_id}"
+
+    return database.execute(query)
