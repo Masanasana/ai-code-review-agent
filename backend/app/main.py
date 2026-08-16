@@ -17,9 +17,9 @@ from app.models import ReviewRequest
 # services/github.py rather than inside this file.
 from app.services.github import (
     get_pull_request,
-    get_pull_request_diff
+    get_pull_request_diff,
 )
-#Import diff processor
+# Import the diff processor.
 from app.services.diff_processor import clean_diff
 
 
