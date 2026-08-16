@@ -76,6 +76,7 @@ async def get_pull_request(
     # and return it to the caller.
     return response.json()
 
+
 async def get_pull_request_diff(
     owner: str,
     repo: str,
