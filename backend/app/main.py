@@ -9,7 +9,11 @@ from fastapi import FastAPI, HTTPException
 
 # Import the Pydantic model used to validate incoming
 # pull request requests.
-from app.models import CodeReview, ReviewRequest
+from app.models import (
+    CodeReview,
+    ReviewRequest,
+    ReviewResponse,
+)
 
 # Import our GitHub service function.
 #
@@ -19,13 +23,17 @@ from app.services.github import (
     get_pull_request,
     get_pull_request_diff,
     parse_pull_request_url,
+    post_pull_request_review,
 )
+
+from app.services.review_formatter import format_review_as_markdown
 
 # Import the diff processor.
 from app.services.diff_processor import clean_diff
 
 from app.services.llm import review_code
 from app.models import CodeReview, ReviewRequest
+from app.config import settings
 
 # Create an instance of the FastAPI application.
 #
@@ -81,7 +89,7 @@ async def health_check():
 # Define a POST endpoint at /review.
 # The frontend will use this endpoint when it wants the AI agent
 # to review a GitHub Pull Request.
-@app.post("/review", response_model=CodeReview)
+@app.post("/review", response_model=ReviewResponse)
 async def review_pull_request(request: ReviewRequest):
     """
     Review a GitHub pull request using the AI code review agent.
@@ -132,12 +140,34 @@ async def review_pull_request(request: ReviewRequest):
         # ---------------------------------------------------------
 
         review = await review_code(cleaned_diff)
+    
 
         # ---------------------------------------------------------
-        # Step 5: Return the structured review
+        # Step 5: Convert the AI review into Markdown
         # ---------------------------------------------------------
 
-        return review
+        review_markdown = format_review_as_markdown(review)
+
+
+        # ---------------------------------------------------------
+        # Step 6: Post the review back to GitHub
+        # ---------------------------------------------------------
+
+        github_review = await post_pull_request_review(
+            owner=owner,
+            repo=repo,
+            pull_number=pull_number,
+            review_body=review_markdown,
+        )
+
+        # ---------------------------------------------------------
+        # Step 7: Return the structured review
+        # ---------------------------------------------------------
+
+        return {
+            "review": review,
+            "github_review_url": github_review["html_url"],
+        }
 
     except HTTPException:
         # Re-raise HTTP exceptions so FastAPI can return the
@@ -152,12 +182,13 @@ async def review_pull_request(request: ReviewRequest):
         ) from exc
 
     except Exception as exc:
-        # Catch unexpected errors so the API returns a useful
-        # response instead of exposing an unhandled exception.
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while reviewing the pull request.",
-        ) from exc
+        # Print the actual exception in the FastAPI terminal.
+        # This is useful during development and debugging.
+        print(f"Review error: {exc}")
+
+        # Re-raise the original exception so FastAPI prints
+        # the full traceback in the terminal.
+    raise
 
 # -------------------------------------------------------------------
 # GitHub Integration Test Endpoint
@@ -308,4 +339,34 @@ async def parse_url_test(pr_url: str):
         "owner": owner,
         "repository": repo,
         "pull_number": pull_number,
+    }
+
+
+@app.get("/github-test/auth")
+async def github_auth_test():
+    """
+    Test whether the configured GitHub token is valid.
+    """
+
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {settings.github_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2026-03-10",
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://api.github.com/user",
+            headers=headers,
+        )
+
+    response.raise_for_status()
+
+    user = response.json()
+
+    return {
+        "github_username": user["login"],
+        "authenticated": True,
     }
