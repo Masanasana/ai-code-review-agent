@@ -9,7 +9,11 @@ from fastapi import FastAPI, HTTPException
 
 # Import the Pydantic model used to validate incoming
 # pull request requests.
-from app.models import CodeReview, ReviewRequest
+from app.models import (
+    CodeReview,
+    ReviewRequest,
+    ReviewResponse,
+)
 
 # Import our GitHub service function.
 #
@@ -19,7 +23,10 @@ from app.services.github import (
     get_pull_request,
     get_pull_request_diff,
     parse_pull_request_url,
+    post_pull_request_review,
 )
+
+from app.services.review_formatter import format_review_as_markdown
 
 # Import the diff processor.
 from app.services.diff_processor import clean_diff
@@ -81,7 +88,7 @@ async def health_check():
 # Define a POST endpoint at /review.
 # The frontend will use this endpoint when it wants the AI agent
 # to review a GitHub Pull Request.
-@app.post("/review", response_model=CodeReview)
+@app.post("/review", response_model=ReviewResponse)
 async def review_pull_request(request: ReviewRequest):
     """
     Review a GitHub pull request using the AI code review agent.
@@ -132,12 +139,34 @@ async def review_pull_request(request: ReviewRequest):
         # ---------------------------------------------------------
 
         review = await review_code(cleaned_diff)
+    
 
         # ---------------------------------------------------------
-        # Step 5: Return the structured review
+        # Step 5: Convert the AI review into Markdown
         # ---------------------------------------------------------
 
-        return review
+        review_markdown = format_review_as_markdown(review)
+
+
+        # ---------------------------------------------------------
+        # Step 6: Post the review back to GitHub
+        # ---------------------------------------------------------
+
+        github_review = await post_pull_request_review(
+            owner=owner,
+            repo=repo,
+            pull_number=pull_number,
+            review_body=review_markdown,
+        )
+
+        # ---------------------------------------------------------
+        # Step 7: Return the structured review
+        # ---------------------------------------------------------
+
+        return {
+            "review": review,
+            "github_review_url": github_review["html_url"],
+        }
 
     except HTTPException:
         # Re-raise HTTP exceptions so FastAPI can return the

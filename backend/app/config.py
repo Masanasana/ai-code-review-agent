@@ -12,18 +12,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """
-    Application settings.
+    Application configuration.
 
-    Values are automatically loaded from the .env file.
+    Values are loaded from environment variables or the .env file.
     """
 
     # API key used to authenticate requests to Groq.
     groq_api_key: str
 
-    # Configuration for loading environment variables.
+    # GitHub token used to authenticate GitHub API requests.
     #
-    # extra="ignore" means that additional environment variables
-    # will not cause validation errors.
+    # This allows the application to access repository information
+    # and post reviews back to pull requests.
+    github_token: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

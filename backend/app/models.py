@@ -64,3 +64,15 @@ class CodeReview(BaseModel):
 
     # General recommendations that are not necessarily associated with one specific issue.
     recommendations: List[str]
+
+class ReviewResponse(BaseModel):
+    """
+    Response returned after an AI code review has been completed
+    and posted to GitHub.
+    """
+
+    # Structured AI review.
+    review: CodeReview
+
+    # URL of the review posted to GitHub.
+    github_review_url: str
