@@ -63,18 +63,26 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
 
-    # Allow requests from our Vite development server.
+    # Only allow requests from our frontend.
+    # During local development, the React/Vite app runs on port 5173.
     allow_origins=[
         "http://localhost:5173",
+
+        # When the frontend is deployed, add its public URL here.
+        # Example:
+        # "https://ai-code-review-frontend.example.com",
     ],
 
-    # Allow cookies/authentication headers if we need them later.
+    # Allow the browser to include credentials such as cookies
+    # or authentication information in cross-origin requests.
     allow_credentials=True,
 
-    # Allow all HTTP methods such as GET and POST.
+    # Allow the frontend to use any HTTP method when communicating
+    # with the backend, e.g. GET, POST, PUT, DELETE, etc.
     allow_methods=["*"],
 
-    # Allow all request headers.
+    # Allow the frontend to send any HTTP headers in its requests.
+    # The "*" means all request headers are allowed.
     allow_headers=["*"],
 )
 
