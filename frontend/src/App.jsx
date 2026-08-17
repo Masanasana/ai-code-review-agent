@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./App.css";
 
+const API_URL = import.meta.env.VITE_API_URL;
 
 function App() {
   // GitHub PR URL entered by the user.
@@ -33,7 +34,7 @@ function App() {
       // All AI and GitHub communication happens through
       // the backend. The frontend never calls Groq directly.
       const response = await fetch(
-        "http://127.0.0.1:8000/review",
+        `${API_URL}/review`,
         {
           method: "POST",
 
