@@ -69,8 +69,8 @@ app.add_middleware(
         "http://localhost:5173",
 
         # When the frontend is deployed, add its public URL here.
-        # Example:
-        # "https://ai-code-review-frontend.example.com",
+        # Example:x
+        "https://ai-code-review-agent-frontend.onrender.com",
     ],
 
     # Allow the browser to include credentials such as cookies
