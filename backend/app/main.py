@@ -26,6 +26,9 @@ from app.services.github import (
     post_pull_request_review,
 )
 
+#Allow bacl end and front end to communicate
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.services.review_formatter import format_review_as_markdown
 
 # Import the diff processor.
@@ -51,6 +54,29 @@ app = FastAPI(
     version="0.1.0",
 )
 
+
+# Allow the local React frontend to communicate with
+# our FastAPI backend during development.
+#
+# The frontend runs on port 5173 while FastAPI runs
+# on port 8000, so they are different origins.
+app.add_middleware(
+    CORSMiddleware,
+
+    # Allow requests from our Vite development server.
+    allow_origins=[
+        "http://localhost:5173",
+    ],
+
+    # Allow cookies/authentication headers if we need them later.
+    allow_credentials=True,
+
+    # Allow all HTTP methods such as GET and POST.
+    allow_methods=["*"],
+
+    # Allow all request headers.
+    allow_headers=["*"],
+)
 
 # Define a GET endpoint at the root URL: "/"
 #

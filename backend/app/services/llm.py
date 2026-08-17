@@ -126,6 +126,51 @@ If there are no meaningful issues, return an empty issues list
 and explain that no significant issues were identified.
 
 Return ONLY valid JSON matching the requested schema.
+
+OUTPUT SCHEMA:
+
+You MUST use these exact field names.
+
+Top-level fields:
+
+{
+    "summary": "...",
+    "overall_risk": "...",
+    "issues": [...],
+    "recommendations": [...]
+}
+
+Each issue MUST have exactly these fields:
+
+{
+    "severity": "high",
+    "category": "security",
+    "file": "backend/app/example.py",
+    "line": 10,
+    "title": "Short issue title",
+    "description": "Detailed explanation of the issue",
+    "recommendation": "How to fix the issue"
+}
+
+IMPORTANT:
+
+- The issue field is called "file".
+- NEVER use "file_path".
+- NEVER use "filename".
+- NEVER use "path".
+- The top-level field is called "recommendations".
+- Do not omit "summary".
+- Do not omit "overall_risk".
+- Do not omit "recommendations".
+
+If there are no issues, return exactly:
+
+{
+    "summary": "No significant issues were identified.",
+    "overall_risk": "low",
+    "issues": [],
+    "recommendations": []
+}
 The response must contain the word "JSON".
 """
 
