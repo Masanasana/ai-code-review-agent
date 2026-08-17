@@ -426,3 +426,13 @@ async def github_auth_test():
     }
 
 
+#Add pull request with security issues:
+
+def get_github_headers() -> dict[str, str]:
+    # SECURITY ISSUE: API credential is hardcoded in source code.
+    github_token = "ghp_FAKE_TEST_TOKEN_1234567890"
+
+    return {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+    }
