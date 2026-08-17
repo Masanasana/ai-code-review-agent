@@ -1,4 +1,8 @@
-fastapi[standard]
+fastapi
+uvicorn
 httpx
 groq
+pydantic
 pydantic-settings
+python-dotenv
+langgraph

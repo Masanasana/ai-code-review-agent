@@ -14,7 +14,7 @@ from app.models import (
     ReviewRequest,
     ReviewResponse,
 )
-
+from app.agent.graph import review_graph
 # Import our GitHub service function.
 #
 # The actual GitHub API communication is kept inside
@@ -92,103 +92,123 @@ async def health_check():
 @app.post("/review", response_model=ReviewResponse)
 async def review_pull_request(request: ReviewRequest):
     """
-    Review a GitHub pull request using the AI code review agent.
-
-    Workflow:
-
-        1. Parse the GitHub PR URL.
-        2. Retrieve the PR diff.
-        3. Clean the diff.
-        4. Send the cleaned diff to the AI model.
-        5. Return the structured AI review.
+    Run the AI code review agent against a GitHub pull request.
     """
 
-    try:
-        # ---------------------------------------------------------
-        # Step 1: Parse the GitHub PR URL
-        # ---------------------------------------------------------
+    # Create the initial state for the agent.
+    initial_state = {
+        "pr_url": str(request.pr_url),
+    }
 
-        owner, repo, pull_number = parse_pull_request_url(
-            str(request.pr_url)
-        )
+    # Execute the LangGraph workflow.
+    result = await review_graph.ainvoke(
+        initial_state
+    )
 
-        # ---------------------------------------------------------
-        # Step 2: Retrieve the pull request diff
-        # ---------------------------------------------------------
+    # Return the AI review and the GitHub review URL.
+    return {
+        "review": result["review"],
+        "github_review_url": result["github_review_url"],
+    }
+# async def review_pull_request(request: ReviewRequest):
+#     """
+#     Review a GitHub pull request using the AI code review agent.
 
-        raw_diff = await get_pull_request_diff(
-            owner=owner,
-            repo=repo,
-            pull_number=pull_number,
-        )
+#     Workflow:
 
-        # ---------------------------------------------------------
-        # Step 3: Clean the diff
-        # ---------------------------------------------------------
+#         1. Parse the GitHub PR URL.
+#         2. Retrieve the PR diff.
+#         3. Clean the diff.
+#         4. Send the cleaned diff to the AI model.
+#         5. Return the structured AI review.
+#     """
 
-        cleaned_diff = clean_diff(raw_diff)
+#     try:
+#         # ---------------------------------------------------------
+#         # Step 1: Parse the GitHub PR URL
+#         # ---------------------------------------------------------
 
-        # Make sure there is actually code to review.
-        if not cleaned_diff.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="No reviewable source-code changes found in the pull request.",
-            )
+#         owner, repo, pull_number = parse_pull_request_url(
+#             str(request.pr_url)
+#         )
 
-        # ---------------------------------------------------------
-        # Step 4: Send the diff to the AI reviewer
-        # ---------------------------------------------------------
+#         # ---------------------------------------------------------
+#         # Step 2: Retrieve the pull request diff
+#         # ---------------------------------------------------------
 
-        review = await review_code(cleaned_diff)
+#         raw_diff = await get_pull_request_diff(
+#             owner=owner,
+#             repo=repo,
+#             pull_number=pull_number,
+#         )
+
+#         # ---------------------------------------------------------
+#         # Step 3: Clean the diff
+#         # ---------------------------------------------------------
+
+#         cleaned_diff = clean_diff(raw_diff)
+
+#         # Make sure there is actually code to review.
+#         if not cleaned_diff.strip():
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="No reviewable source-code changes found in the pull request.",
+#             )
+
+#         # ---------------------------------------------------------
+#         # Step 4: Send the diff to the AI reviewer
+#         # ---------------------------------------------------------
+
+#         review = await review_code(cleaned_diff)
     
 
-        # ---------------------------------------------------------
-        # Step 5: Convert the AI review into Markdown
-        # ---------------------------------------------------------
+#         # ---------------------------------------------------------
+#         # Step 5: Convert the AI review into Markdown
+#         # ---------------------------------------------------------
 
-        review_markdown = format_review_as_markdown(review)
+#         review_markdown = format_review_as_markdown(review)
 
 
-        # ---------------------------------------------------------
-        # Step 6: Post the review back to GitHub
-        # ---------------------------------------------------------
+#         # ---------------------------------------------------------
+#         # Step 6: Post the review back to GitHub
+#         # ---------------------------------------------------------
 
-        github_review = await post_pull_request_review(
-            owner=owner,
-            repo=repo,
-            pull_number=pull_number,
-            review_body=review_markdown,
-        )
+#         github_review = await post_pull_request_review(
+#             owner=owner,
+#             repo=repo,
+#             pull_number=pull_number,
+#             review_body=review_markdown,
+#         )
 
-        # ---------------------------------------------------------
-        # Step 7: Return the structured review
-        # ---------------------------------------------------------
+#         # ---------------------------------------------------------
+#         # Step 7: Return the structured review
+#         # ---------------------------------------------------------
 
-        return {
-            "review": review,
-            "github_review_url": github_review["html_url"],
-        }
+#         return {
+#             "review": review,
+#             "github_review_url": github_review["html_url"],
+#         }
 
-    except HTTPException:
-        # Re-raise HTTP exceptions so FastAPI can return the
-        # correct status code and error message.
-        raise
+#     except HTTPException:
+#         # Re-raise HTTP exceptions so FastAPI can return the
+#         # correct status code and error message.
+#         raise
 
-    except ValueError as exc:
-        # URL parsing errors are client-side input errors.
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
+#     except ValueError as exc:
+#         # URL parsing errors are client-side input errors.
+#         raise HTTPException(
+#             status_code=400,
+#             detail=str(exc),
+#         ) from exc
 
-    except Exception as exc:
-        # Print the actual exception in the FastAPI terminal.
-        # This is useful during development and debugging.
-        print(f"Review error: {exc}")
+#     except Exception as exc:
+#         # Print the actual exception in the FastAPI terminal.
+#         # This is useful during development and debugging.
+#         print(f"Review error: {exc}")
 
-        # Re-raise the original exception so FastAPI prints
-        # the full traceback in the terminal.
-    raise
+#         # Re-raise the original exception so FastAPI prints
+#         # the full traceback in the terminal.
+#     raise
 
 # -------------------------------------------------------------------
 # GitHub Integration Test Endpoint
