@@ -119,7 +119,7 @@ async def health_check():
         "status": "healthy"
     }
 
-
+#test
 # Define a POST endpoint at /review.
 # The frontend will use this endpoint when it wants the AI agent
 # to review a GitHub Pull Request.
@@ -426,13 +426,3 @@ async def github_auth_test():
     }
 
 
-#Add pull request with security issues:
-
-def get_github_headers() -> dict[str, str]:
-    # SECURITY ISSUE: API credential is hardcoded in source code.
-    github_token = "ghp_FAKE_TEST_TOKEN_1234567890"
-
-    return {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github+json",
-    }
