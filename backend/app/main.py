@@ -78,7 +78,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Define a GET endpoint at the root URL: "/"
+# Define a GET endpoint at the root URL: "/" test
 #
 # When someone sends a GET request to:
 #     http://127.0.0.1:8000/
