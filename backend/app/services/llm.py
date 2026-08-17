@@ -25,7 +25,7 @@ client = Groq(
 #
 # We keep the model name in one place so it can easily be
 # changed later without modifying the review logic.
-MODEL_NAME = "llama-3.3-70b-versatile"
+MODEL_NAME = "openai/gpt-oss-120b"
 
 
 # System prompt defines the role and behaviour of our AI reviewer.
