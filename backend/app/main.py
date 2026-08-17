@@ -38,7 +38,7 @@ from app.services.llm import review_code
 from app.models import CodeReview, ReviewRequest
 from app.config import settings
 
-# Create an instance of the FastAPI application.
+# Create an instance of the FastAPI application. test
 #
 # This 'app' object is the main entry point for our backend.
 # We will attach our API endpoints (routes) to this object below.
@@ -69,8 +69,8 @@ app.add_middleware(
         "http://localhost:5173",
 
         # When the frontend is deployed, add its public URL here.
-        # Example:
-        # "https://ai-code-review-frontend.example.com",
+        # Example:x
+        "https://ai-code-review-agent-frontend.onrender.com",
     ],
 
     # Allow the browser to include credentials such as cookies
@@ -86,7 +86,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Define a GET endpoint at the root URL: "/" test
+# Define a GET endpoint at the root URL: "/" 
 #
 # When someone sends a GET request to:
 #     http://127.0.0.1:8000/
