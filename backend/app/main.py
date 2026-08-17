@@ -74,7 +74,7 @@ app.add_middleware(
     ],
 
     # Allow the browser to include credentials such as cookies
-    # or authentication information in cross-origin requests.
+    # or authentication information in cross-origin requests. test
     allow_credentials=True,
 
     # Allow the frontend to use any HTTP method when communicating
