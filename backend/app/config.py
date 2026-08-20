@@ -1,30 +1,17 @@
-"""
-Application configuration.
-
-This module loads configuration values from environment variables.
-
-Sensitive values such as API keys should never be hardcoded
-directly into the application source code.
-"""
+"""Application configuration loaded from environment variables."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """
-    Application configuration.
+    """Application configuration."""
 
-    Values are loaded from environment variables or the .env file.
-    """
-
-    # API key used to authenticate requests to Groq.
     groq_api_key: str
 
-    # GitHub token used to authenticate GitHub API requests.
-    #
-    # This allows the application to access repository information
-    # and post reviews back to pull requests.
-    github_token: str
+    # Optional for public-repository read access.
+    # A token is still recommended because it gives GitHub API requests
+    # a higher rate limit and is required if the app should post reviews.
+    github_token: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -33,6 +20,4 @@ class Settings(BaseSettings):
     )
 
 
-# Create one settings object that can be imported throughout
-# the application.
 settings = Settings()

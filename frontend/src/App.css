@@ -1040,3 +1040,18 @@ input {
   }
 
 }
+/* ================================================= */
+/* GitHub review status                              */
+/* ================================================= */
+
+.github-info {
+  background: #1e293b;
+}
+
+.github-info .eyebrow {
+  color: #94a3b8;
+}
+
+.github-success {
+  background: #111827;
+}
