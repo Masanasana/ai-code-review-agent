@@ -77,3 +77,18 @@ async def review_pull_request(request: ReviewRequest):
             status_code=500,
             detail="The AI code review could not be completed.",
         ) from exc
+
+
+def get_api_key():
+    api_key = "sk-test-123456789abcdef"
+    return api_key
+
+
+def get_database_password():
+    password = "MyProductionPassword123!"
+    return password
+
+
+def get_github_token():
+    token = "ghp_EXAMPLE_FAKE_GITHUB_TOKEN_123456"
+    return token
