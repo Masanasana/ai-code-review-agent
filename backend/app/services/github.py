@@ -1,233 +1,102 @@
-"""
-GitHub API service.
+"""GitHub API service for public pull-request reviews."""
 
-This module contains functions responsible for communicating
-with the GitHub REST API.
-
-Keeping GitHub-related logic here means that our FastAPI routes
-do not need to know how the GitHub API works.
-"""
+from urllib.parse import urlparse
 
 import httpx
-from urllib.parse import urlparse
-# Base URL for GitHub's REST API.
-# We will append specific endpoints to this URL.
-GITHUB_API_URL = "https://api.github.com"
 
 from app.config import settings
 
-async def get_pull_request(
-    owner: str,
-    repo: str,
-    pull_number: int,
-):
-    """
-    Retrieve information about a GitHub pull request.
 
-    Parameters
-    ----------
-    owner : str
-        GitHub username or organisation that owns the repository.
-
-    repo : str
-        Name of the GitHub repository.
-
-    pull_number : int
-        Number of the pull request.
-
-    Returns
-    -------
-    dict
-        JSON response returned by the GitHub API.
-
-    Raises
-    ------
-    httpx.HTTPStatusError
-        If GitHub returns an unsuccessful HTTP status code.
-    """
-
-    # Construct the GitHub API endpoint for the specific PR.
-    #
-    # Example:
-    # https://api.github.com/repos/openai/example/pulls/12
-    url = (
-        f"{GITHUB_API_URL}/repos/"
-        f"{owner}/{repo}/pulls/{pull_number}"
-    )
-
-    # Create an asynchronous HTTP client.
-    #
-    # "async with" ensures that the HTTP connection is properly
-    # closed after the request has completed.
-    # async with httpx.AsyncClient() as client:
-
-    #     # Send a GET request to GitHub.
-    #     response = await client.get(url)
-
-    headers = get_github_headers()
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            url,
-            headers=headers,
-        )
-    # Raise an exception if GitHub returned an error.
-    #
-    # For example:
-    # 404 -> repository or PR does not exist
-    # 401 -> authentication problem
-    # 403 -> permission/rate-limit problem
-    response.raise_for_status()
-
-    # Convert GitHub's JSON response into a Python dictionary
-    # and return it to the caller.
-    return response.json()
+GITHUB_API_URL = "https://api.github.com"
+GITHUB_API_VERSION = "2022-11-28"
 
 
-async def get_pull_request_diff(
-    owner: str,
-    repo: str,
-    pull_number: int,
-):
-    """
-    Retrieve the code changes introduced by a pull request.
+class GitHubReviewPermissionError(Exception):
+    """Raised when the configured GitHub identity cannot post a review."""
 
-    GitHub provides the PR diff when we request the pull request
-    using the media type:
 
-        application/vnd.github.diff
+def get_github_headers(accept: str = "application/vnd.github+json") -> dict[str, str]:
+    """Build GitHub API headers, using authentication when configured."""
 
-    The diff is particularly important for our application because
-    this is the code that will eventually be sent to the AI model
-    for review.
+    headers = {
+        "Accept": accept,
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+    }
 
-    Parameters
-    ----------
-    owner : str
-        GitHub username or organisation that owns the repository.
+    # Public repositories can be read without authentication.
+    # If a token is configured, use it for higher API limits and
+    # for the optional operation of posting a review.
+    if settings.github_token:
+        headers["Authorization"] = f"Bearer {settings.github_token}"
 
-    repo : str
-        Name of the repository.
-
-    pull_number : int
-        Pull request number.
-
-    Returns
-    -------
-    str
-        Unified diff containing the changes made by the PR.
-    """
-
-    # Construct the GitHub API endpoint for the pull request.
-    url = (
-        f"{GITHUB_API_URL}/repos/"
-        f"{owner}/{repo}/pulls/{pull_number}"
-    )
-
-    # Get our standard authenticated GitHub headers.
-    headers = get_github_headers()
-
-    # Override the Accept header because we want the PR
-    # returned as a unified diff rather than JSON.
-    headers["Accept"] = "application/vnd.github.diff"
-
-    # Create an asynchronous HTTP client.
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            url,
-            headers=headers,
-        )
-    # Raise an exception if GitHub returned an unsuccessful
-    # HTTP status code.
-    response.raise_for_status()
-
-    # Return the raw diff as text.
-    return response.text
+    return headers
 
 
 def parse_pull_request_url(pr_url: str) -> tuple[str, str, int]:
     """
-    Extract the repository owner, repository name, and pull
-    request number from a GitHub pull request URL.
+    Extract owner, repository and pull-request number from a GitHub URL.
 
-    Expected URL format:
-
+    Accepted format:
         https://github.com/<owner>/<repository>/pull/<number>
-
-    Parameters
-    ----------
-    pr_url : str
-        GitHub pull request URL.
-
-    Returns
-    -------
-    tuple[str, str, int]
-        A tuple containing:
-
-        - repository owner
-        - repository name
-        - pull request number
-
-    Raises
-    ------
-    ValueError
-        If the supplied URL is not a valid GitHub pull request URL.
     """
 
-    # Parse the URL into its individual components.
-    parsed_url = urlparse(pr_url)
+    parsed_url = urlparse(pr_url.strip())
 
-    # Make sure the URL actually points to GitHub.
-    if parsed_url.netloc.lower() != "github.com":
-        raise ValueError("URL must belong to github.com")
+    if parsed_url.scheme != "https" or parsed_url.netloc.lower() not in {
+        "github.com",
+        "www.github.com",
+    }:
+        raise ValueError("URL must be an HTTPS GitHub pull request URL")
 
-    # Remove leading/trailing slashes and split the path.
-    #
-    # Example:
-    #
-    # /Masanasana/ai-code-review-agent/pull/2
-    #
-    # becomes:
-    #
-    # ["Masanasana", "ai-code-review-agent", "pull", "2"]
-    path_parts = parsed_url.path.strip("/").split("/")
+    path_parts = [part for part in parsed_url.path.strip("/").split("/") if part]
 
-    # A valid PR URL should have exactly this structure:
-    #
-    # owner / repository / pull / number
-    if len(path_parts) != 4:
-        raise ValueError("Invalid GitHub pull request URL")
+    if len(path_parts) != 4 or path_parts[2].lower() != "pull":
+        raise ValueError(
+            "Invalid GitHub pull request URL. Expected "
+            "https://github.com/owner/repository/pull/123"
+        )
 
-    owner = path_parts[0]
-    repo = path_parts[1]
-    pull_keyword = path_parts[2]
-    pull_number = path_parts[3]
+    owner, repo, _, pull_number_text = path_parts
 
-    # Make sure this is actually a pull request URL.
-    if pull_keyword != "pull":
-        raise ValueError("URL does not point to a pull request")
+    if not owner or not repo:
+        raise ValueError("GitHub owner and repository are required")
 
-    # Convert the PR number from a string into an integer.
     try:
-        pull_number = int(pull_number)
-    except ValueError:
-        raise ValueError("Pull request number must be an integer")
+        pull_number = int(pull_number_text)
+    except ValueError as exc:
+        raise ValueError("Pull request number must be an integer") from exc
+
+    if pull_number <= 0:
+        raise ValueError("Pull request number must be greater than zero")
 
     return owner, repo, pull_number
 
-def get_github_headers() -> dict[str, str]:
-    """
-    Build the HTTP headers used when communicating with GitHub.
 
-    The Authorization header allows us to make authenticated
-    requests using the GitHub token stored in our environment.
-    """
+async def get_pull_request(owner: str, repo: str, pull_number: int) -> dict:
+    """Retrieve pull-request metadata from GitHub."""
 
-    return {
-        "Authorization": f"Bearer {settings.github_token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/pulls/{pull_number}"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, headers=get_github_headers())
+
+    response.raise_for_status()
+    return response.json()
+
+
+async def get_pull_request_diff(owner: str, repo: str, pull_number: int) -> str:
+    """Retrieve the unified diff for a GitHub pull request."""
+
+    url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/pulls/{pull_number}"
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.get(
+            url,
+            headers=get_github_headers("application/vnd.github.diff"),
+        )
+
+    response.raise_for_status()
+    return response.text
 
 
 async def post_pull_request_review(
@@ -235,62 +104,35 @@ async def post_pull_request_review(
     repo: str,
     pull_number: int,
     review_body: str,
-):
+) -> dict | None:
     """
-    Post a review to a GitHub pull request.
+    Try to post the AI review to GitHub.
 
-    Parameters
-    ----------
-    owner : str
-        GitHub username or organisation that owns the repository.
-
-    repo : str
-        Name of the repository.
-
-    pull_number : int
-        Pull request number.
-
-    review_body : str
-        Markdown-formatted review generated by the AI agent.
-
-    Returns
-    -------
-    dict
-        GitHub API response containing information about the
-        newly created review.
+    Reading a public repository only requires read access. Posting a
+    review requires write permission on the repository, so failure to
+    post is deliberately non-fatal to the AI review itself.
     """
 
-    # GitHub endpoint used to create a pull request review.
-    url = (
-        f"{GITHUB_API_URL}/repos/"
-        f"{owner}/{repo}/pulls/{pull_number}/reviews"
-    )
+    if not settings.github_token:
+        return None
 
-    # Get our standard authenticated GitHub headers.
+    url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/pulls/{pull_number}/reviews"
+
     headers = get_github_headers()
-
-    # Tell GitHub that we are sending JSON.
     headers["Content-Type"] = "application/json"
 
-    # Build the request body.
-    #
-    # "COMMENT" means the review will be posted as a comment
-    # rather than approving or rejecting the pull request.
     payload = {
         "body": review_body,
         "event": "COMMENT",
     }
 
-    # Send the review to GitHub.
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            url,
-            headers=headers,
-            json=payload,
-        )
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, headers=headers, json=payload)
 
-    # Raise an exception if GitHub rejects the request.
+    # These statuses mean the configured identity cannot post a review
+    # to this repository/PR. The AI review should still be returned.
+    if response.status_code in {401, 403, 404, 422}:
+        return None
+
     response.raise_for_status()
-
-    # Return GitHub's response as a Python dictionary.
     return response.json()
