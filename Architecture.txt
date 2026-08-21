@@ -1,58 +1,199 @@
+# AI Code Review Agent Architecture
+
+## Overview
+
+The AI Code Review Agent accepts a GitHub Pull Request URL and reviews the changed code for security vulnerabilities, bugs, performance issues, and maintainability concerns.
+
+The application supports **any public GitHub repository**. The repository does not need to belong to the configured GitHub account.
+
+A GitHub token is optional for reading public repositories. When a token is available, it provides higher API rate limits and allows the application to post a review when the configured GitHub account has sufficient repository permissions.
+
+## End-to-End Workflow
+
+```text
 User
- │
- ▼
-┌─────────────────────┐
-│ React / Vite        │
-│ Frontend            │
-└─────────┬───────────┘
-          │ POST /review
-          ▼
-┌─────────────────────┐
-│ FastAPI             │
-│ REST API            │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│ LangGraph Agent     │
-│                     │
-│  ┌───────────────┐  │
-│  │ Parse PR URL  │  │
-│  └───────┬───────┘  │
-│          ▼          │
-│  ┌───────────────┐  │
-│  │ Get PR + Diff │  │
-│  └───────┬───────┘  │
-│          ▼          │
-│  ┌───────────────┐  │
-│  │ Clean Diff    │  │
-│  └───────┬───────┘  │
-│          ▼          │
-│  ┌───────────────┐  │
-│  │ AI Code Review│  │
-│  └───────┬───────┘  │
-│          ▼          │
-│  ┌───────────────┐  │
-│  │ Validate JSON │  │
-│  └───────┬───────┘  │
-└──────────┼──────────┘
-           │
-     ┌─────┴─────┐
-     ▼           ▼
-┌──────────┐ ┌──────────────┐
-│ GitHub   │ │ Groq         │
-│ REST API │ │ GPT-OSS 120B │
-└────┬─────┘ └──────┬───────┘
-     │              │
-     └──────┬───────┘
-            ▼
-     ┌──────────────┐
-     │ Code Review  │
-     │ Result       │
-     └──────┬───────┘
-            │
-            ▼
-     ┌──────────────┐
-     │ GitHub PR    │
-     │ Review       │
-     └──────────────┘
+  |
+  v
+React / Vite Frontend
+  |
+  | POST /review
+  v
+FastAPI REST API
+  |
+  v
+LangGraph Review Workflow
+  |
+  +--> Parse PR URL
+  |
+  +--> Validate Public Repository
+  |
+  +--> Get Pull Request + Diff
+  |
+  +--> Clean Diff
+  |
+  +--> AI Code Review (Groq LLM)
+  |
+  +--> Format Review
+  |
+  +--> Try to Post Review to GitHub
+           |
+           +--> Permission available
+           |       |
+           |       v
+           |   Post GitHub Review
+           |
+           +--> No permission
+                   |
+                   v
+               Keep AI Review
+  |
+  v
+Review Result
+  |
+  +--> AI Review displayed in Frontend
+  |
+  +--> GitHub Review URL displayed when posting succeeds
+```
+
+## Components
+
+### Frontend
+
+The frontend is implemented with React/Vite.
+
+Responsibilities:
+
+- Accept a public GitHub pull request URL.
+- Send the URL to the backend `/review` endpoint.
+- Display the AI-generated code review.
+- Display whether the review was successfully posted to GitHub.
+- Provide a GitHub link when a review was posted successfully.
+
+### FastAPI Backend
+
+The FastAPI application exposes the review API.
+
+Responsibilities:
+
+- Validate incoming requests.
+- Start the LangGraph review workflow.
+- Return the structured review result.
+- Distinguish between successful AI review and successful GitHub posting.
+
+### GitHub Service
+
+The GitHub service handles GitHub API interactions.
+
+Responsibilities:
+
+- Parse GitHub pull request URLs dynamically.
+- Retrieve pull request metadata.
+- Retrieve pull request diffs.
+- Validate that the repository is public.
+- Attempt to post the generated review when credentials and permissions allow it.
+
+The service does not assume a fixed repository owner or repository name.
+
+### LangGraph Agent
+
+The review workflow is orchestrated using LangGraph.
+
+The current workflow consists of:
+
+1. `parse_pr` - extracts the GitHub owner, repository, and pull request number.
+2. `validate_pr` - confirms that the repository is publicly accessible.
+3. `fetch_diff` - retrieves the pull request and changed code.
+4. `clean_diff` - prepares the diff for analysis.
+5. `review_code` - sends the relevant code to the AI model for review.
+6. `format_review` - converts the AI output into the application's review format.
+7. `post_review` - attempts to publish the review to GitHub.
+
+### Groq LLM
+
+The AI model analyses the pull request changes and identifies issues such as:
+
+- Security vulnerabilities
+- Hardcoded credentials and secrets
+- Bugs
+- Unsafe coding practices
+- Performance problems
+- Maintainability issues
+
+### GitHub REST API
+
+The GitHub API is used for:
+
+- Pull request metadata
+- Pull request diffs
+- Repository visibility
+- Optional review posting
+
+Reading a public repository does not require write access.
+
+Posting a review does require the configured GitHub identity to have sufficient permission.
+
+## Important Design Decision: Review vs. Posting
+
+Generating an AI review and posting that review to GitHub are treated as separate operations.
+
+If the repository is public but the configured GitHub account cannot post a review:
+
+```text
+Public PR
+   |
+   v
+Fetch + Analyse
+   |
+   v
+AI Review Generated
+   |
+   X GitHub posting rejected
+   |
+   v
+AI Review Still Returned to User
+```
+
+This means lack of GitHub write permission does not cause an otherwise successful AI review to fail.
+
+## API Response
+
+The backend returns:
+
+- `review` - the generated AI code review.
+- `github_review_url` - the GitHub review URL when successfully posted.
+- `github_review_posted` - whether GitHub posting succeeded.
+- `github_message` - an explanation of the GitHub posting status.
+
+## Security Considerations
+
+GitHub credentials are loaded from environment variables rather than hardcoded into the application.
+
+For public repository review:
+
+```text
+GROQ_API_KEY
+```
+
+is required for the AI review.
+
+A GitHub token is optional for reading public repositories:
+
+```text
+GITHUB_TOKEN
+```
+
+It is recommended for higher API rate limits and is required when the application needs to post reviews using the configured GitHub account.
+
+Never commit real API keys, GitHub tokens, cloud credentials, database passwords, or other secrets to source control.
+
+## Deployment
+
+The backend can be deployed as a FastAPI web service on Render.
+
+Typical Render start command:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+The frontend can be deployed separately and configured to use the deployed backend URL.
